@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1945 웹 슈터 - 전투 시스템 완성판</title>
+    <style>
+        body { margin: 0; padding: 0; background-color: #0b0c10; display: flex; justify-content: center; align-items: center; height: 100vh; color: #c5c6c7; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; user-select: none; }
+        #gameWrapper { position: relative; width: 450px; height: 700px; background: #1f2833; box-shadow: 0 10px 30px rgba(0,0,0,0.8); overflow: hidden; border-radius: 10px; }
+        canvas { display: block; background-color: #000; }
+        .panel { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(11, 12, 16, 0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 50; transition: opacity 0.3s; }
+        .hidden { display: none !important; }
+        #lobbyUI { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
+        .lobby-btn { pointer-events: auto; position: absolute; background: rgba(31, 40, 51, 0.8); border: 2px solid #66fcf1; color: #66fcf1; padding: 10px 15px; border-radius: 8px; font-weight: bold; cursor: pointer; backdrop-filter: blur(5px); transition: 0.2s; }
+        .lobby-btn:hover { background: #66fcf1; color: #0b0c10; }
+        #btnShop { top: 15px; left: 15px; } #btnChar { top: 15px; left: 85px; }
+        #btnAdminIcon { top: 15px; right: 15px; font-size: 16px; border-color: #f0f; color: #f0f; } #btnAdminIcon:hover { background: #f0f; color: white; }
+        #btnAchieve { bottom: 15px; left: 15px; } #btnStageSelect { bottom: 15px; right: 15px; border-color: #45a29e; color: #45a29e; } #btnStageSelect:hover { background: #45a29e; color: white; }
+        .title-box { pointer-events: auto; position: absolute; top: 30%; width: 100%; text-align: center; }
+        h1 { font-size: 48px; color: #66fcf1; text-shadow: 0 0 20px rgba(102, 252, 241, 0.5); margin: 0; letter-spacing: 2px; }
+        .coin-display { font-size: 20px; color: gold; margin-top: 10px; }
+        #btnStart { background: #66fcf1; color: #0b0c10; font-size: 24px; padding: 15px 40px; border: none; border-radius: 30px; margin-top: 50px; cursor: pointer; font-weight: bold; box-shadow: 0 0 15px #66fcf1; } #btnStart:active { transform: scale(0.95); }
+        #inGameUI { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+        .top-bar { display: flex; justify-content: center; padding: 15px; font-size: 24px; font-weight: bold; color: white; text-shadow: 2px 2px 4px #000; }
+        .hp-bar-bg { position: absolute; bottom: 20px; left: 20px; width: 150px; height: 15px; background: #333; border: 2px solid #fff; border-radius: 10px; overflow: hidden; }
+        #hpBarFill { height: 100%; background: linear-gradient(90deg, #f00, #0f0); width: 100%; transition: width 0.2s; }
+        #bossHpContainer { position: absolute; top: 50px; left: 50%; transform: translateX(-50%); width: 80%; height: 20px; background: #333; border: 2px solid red; border-radius: 10px; overflow: hidden; display: none; }
+        #bossHpFill { height: 100%; background: red; width: 100%; transition: width 0.1s; }
+        .popup-content { background: #1f2833; padding: 30px; border-radius: 15px; width: 80%; max-height: 80%; overflow-y: auto; border: 1px solid #45a29e; position: relative; }
+        h2 { color: #66fcf1; margin-top: 0; text-align: center; border-bottom: 1px solid #45a29e; padding-bottom: 10px; }
+        .close-btn { position: absolute; top: 15px; right: 20px; font-size: 24px; cursor: pointer; color: #aaa; background: none; border: none; } .close-btn:hover { color: white; }
+        button.action-btn { background: #45a29e; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 16px; margin: 5px; } button.action-btn:hover { background: #66fcf1; color: #000; }
+        .item-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; } .item-card { background: #0b0c10; border: 1px solid #45a29e; padding: 10px; border-radius: 8px; text-align: center; } .item-card img { width: 50px; height: 50px; object-fit: contain; margin-bottom: 5px; }
+        input[type="text"], input[type="password"], input[type="number"] { width: calc(100% - 20px); padding: 10px; margin: 5px 0 15px; border-radius: 5px; border: none; background: #0b0c10; color: white; }
+        .admin-section { border: 1px solid #45a29e; padding: 15px; margin-bottom: 15px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+<div id="gameWrapper">
+    <canvas id="gameCanvas" width="450" height="700"></canvas>
+    
+    <div id="inGameUI" class="hidden">
+        <div class="top-bar">
+            <span>SCORE: <span id="uiScore">0</span></span>
+            <button class="action-btn" style="position: absolute; right: 15px; top: 10px; font-size: 14px; padding: 5px 10px; pointer-events: auto; background: #f00;" onclick="quitGame()">나가기</button>
+        </div>
+        <div id="bossHpContainer"><div id="bossHpFill"></div></div>
+        <div class="hp-bar-bg"><div id="hpBarFill"></div></div>
+    </div>
+
+    <div id="lobbyUI">
+        <button class="lobby-btn" id="btnShop" onclick="openPopup('shopPopup')">상점</button>
+        <button class="lobby-btn" id="btnChar" onclick="openCharSelect()">캐릭터</button>
+        <button class="lobby-btn" id="btnAdminIcon" onclick="openPopup('adminLoginPopup')">⚙️</button>
+        <div class="title-box">
+            <h1>1945 STRIKE</h1>
+            <div class="coin-display">💰 <span id="uiCoins">0</span></div>
+            <button id="btnStart" onclick="startStage(gameData.maxStage)">GAME START</button>
+        </div>
+        <button class="lobby-btn" id="btnAchieve" onclick="openAchievements()">업적</button>
+        <button class="lobby-btn" id="btnStageSelect" onclick="openStageSelect()">스테이지 선택</button>
+    </div>
+
+    <div id="stageSelectPopup" class="panel hidden">
+        <div class="popup-content">
+            <button class="close-btn" onclick="closePopup('stageSelectPopup')">×</button>
+            <h2>스테이지 선택</h2>
+            <div id="stageList" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;"></div>
+        </div>
+    </div>
+
+    <div id="resultPopup" class="panel hidden">
+        <div class="popup-content" style="text-align: center;">
+            <h1 id="resultTitle">GAME OVER</h1>
+            <p style="font-size: 20px;">SCORE: <span id="resultScore">0</span></p>
+            <p style="font-size: 20px; color: gold;" id="resultCoinsText"></p>
+            <div style="margin-top: 20px;">
+                <button class="action-btn" onclick="retryCurrentStage()">다시 플레이하기</button>
+                <button class="action-btn" onclick="openStageSelectFromResult()">스테이지 선택</button>
+                <button class="action-btn" style="background:#555;" onclick="goLobby()">로비</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="shopPopup" class="panel hidden"><div class="popup-content"><button class="close-btn" onclick="closePopup('shopPopup')">×</button><h2>상점 <span style="font-size:14px; color:gold;">(보유: <span id="shopCoins">0</span>)</span></h2><div id="shopList" class="item-list"></div></div></div>
+    <div id="charPopup" class="panel hidden"><div class="popup-content"><button class="close-btn" onclick="closePopup('charPopup')">×</button><h2>캐릭터 장착</h2><div id="charList" class="item-list"></div></div></div>
+    <div id="achievePopup" class="panel hidden"><div class="popup-content"><button class="close-btn" onclick="closePopup('achievePopup')">×</button><h2>나의 업적</h2><div id="achieveList" style="text-align: left; line-height: 1.8;"></div></div></div>
+    
+    <div id="adminLoginPopup" class="panel hidden"><div class="popup-content"><button class="close-btn" onclick="closePopup('adminLoginPopup')">×</button><h2>관리자 접속</h2><input type="text" id="loginId" placeholder="아이디"><input type="password" id="loginPw" placeholder="비밀번호"><button class="action-btn" style="width: 100%;" onclick="tryAdminLogin()">로그인</button></div></div>
+    
+    <div id="adminPanel" class="panel hidden">
+        <div class="popup-content" style="max-height: 90%;">
+            <button class="close-btn" onclick="closePopup('adminPanel')">×</button>
+            <h2>🛠️ 관리자 패널</h2>
+            <div class="admin-section"><h3>계정 설정</h3><input type="text" id="setAdminId" placeholder="새 아이디"><input type="password" id="setAdminPw" placeholder="새 비밀번호"><button class="action-btn" onclick="saveAdminCreds()">변경 저장</button></div>
+            <div class="admin-section"><h3>적군 & 보스 이미지 (현재 세션 임시적용)</h3><p>일반 적기 (다중 선택 가능): <input type="file" id="uploadEnemies" accept="image/*" multiple></p><p>보스 기체: <input type="file" id="uploadBoss" accept="image/*"></p></div>
+            <div class="admin-section"><h3>상점 캐릭터 설정 (총 10슬롯)</h3><div id="adminCharSlots" style="max-height: 200px; overflow-y: auto;"></div><button class="action-btn" onclick="saveAdminChars()" style="width:100%; margin-top:10px;">캐릭터 가격 저장</button></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let defaultData = { coins: 0, maxStage: 1, ownedChars: [0], equippedChar: 0, adminId: 'sean', adminPw: '1234', achievements: [], charPrices: [0, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 5000] };
+    let gameData = JSON.parse(localStorage.getItem('1945_data')) || defaultData;
+    function saveData() { localStorage.setItem('1945_data', JSON.stringify(gameData)); updateLobbyUI(); }
+
+    const charColors = ['#0af', '#f00', '#0f0', '#ff0', '#f0f', '#0ff', '#f80', '#80f', '#fff', '#888'];
+    let customCharImages = new Array(10).fill(null); 
+    let customEnemyImages = []; let customBossImage = null;
+
+    let gameState = 'LOBBY'; let currentStage = 1; let score = 0; let stageTimer = 0; let isBossStage = false; let bossSpawned = false;
+    let weaponLevel = 1; 
+    let keys = {};
+    window.addEventListener('keydown', e => keys[e.code] = true);
+    window.addEventListener('keyup', e => keys[e.code] = false);
+
+    class Star {
+        constructor() { this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height; this.size = Math.random() * 2; this.speed = Math.random() * 3 + 1; }
+        update() { this.y += this.speed; if (this.y > canvas.height) { this.y = 0; this.x = Math.random() * canvas.width; } }
+        draw() { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); }
+    }
+
+    class Player {
+        constructor() {
+            this.width = 45; this.height = 45;
+            this.x = canvas.width / 2 - this.width / 2; this.y = canvas.height - 80;
+            this.speed = 6; this.cooldown = 0; this.baseCooldown = 12; // 기본 연사력
+            this.maxHp = 100; this.hp = 100;
+            this.shield = false; // 쉴드 상태
+            this.img = customCharImages[gameData.equippedChar]; this.color = charColors[gameData.equippedChar];
+        }
+        update() {
+            if (keys['ArrowLeft'] && this.x > 0) this.x -= this.speed;
+            if (keys['ArrowRight'] && this.x < canvas.width - this.width) this.x += this.speed;
+            if (keys['ArrowUp'] && this.y > 0) this.y -= this.speed;
+            if (keys['ArrowDown'] && this.y < canvas.height - this.height) this.y += this.speed;
+
+            if ((keys['Space'] || keys['KeyZ']) && this.cooldown <= 0) {
+                const cx = this.x + this.width / 2;
+                if (weaponLevel === 1) {
+                    bullets.push(new Bullet(cx, this.y, -15, '#ff0', 10));
+                } else if (weaponLevel === 2) {
+                    bullets.push(new Bullet(cx - 10, this.y, -15, '#ff0', 10)); bullets.push(new Bullet(cx + 10, this.y, -15, '#ff0', 10));
+                } else { // 3방향 확산탄
+                    bullets.push(new Bullet(cx, this.y, -15, '#ff0', 10));
+                    bullets.push(new Bullet(cx - 15, this.y + 10, -13, '#ff0', 10, false, -3));
+                    bullets.push(new Bullet(cx + 15, this.y + 10, -13, '#ff0', 10, false, 3));
+                }
+                this.cooldown = this.baseCooldown;
+            }
+            if (this.cooldown > 0) this.cooldown--;
+        }
+        draw() {
+            if (this.shield) {
+                ctx.beginPath(); ctx.arc(this.x + this.width/2, this.y + this.height/2, this.width/2 + 10, 0, Math.PI*2);
+                ctx.strokeStyle = '#0af'; ctx.lineWidth = 3; ctx.stroke();
+            }
+            if (this.img) ctx.drawImage(this.img, this.x, this.y, this.width, this.height);
+            else { ctx.fillStyle = this.color; ctx.fillRect(this.x, this.y, this.width, this.height); }
+        }
+        takeDamage(amt) {
+            if (this.shield) { this.shield = false; return; } // 쉴드가 있으면 데미지 무시하고 쉴드만 파괴
+            this.hp -= amt;
+            document.getElementById('hpBarFill').style.width = Math.max(0, (this.hp / this.maxHp) * 100) + '%';
+            if(this.hp <= 0) endGame(false);
+        }
+        heal(amt) {
+            this.hp = Math.min(this.maxHp, this.hp + amt);
+            document.getElementById('hpBarFill').style.width = Math.max(0, (this.hp / this.maxHp) * 100) + '%';
+        }
+    }
+
+    class Bullet {
+        constructor(x, y, vy, color, damage, isEnemy = false, vx = 0) {
+            this.x = x; this.y = y; this.vy = vy; this.vx = vx; 
+            this.radius = isEnemy ? 5 : 4; this.color = color;
+            this.damage = damage; this.isEnemy = isEnemy;
+        }
+        update() { this.x += this.vx; this.y += this.vy; }
+        draw() { ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill(); }
+    }
+
+    class Enemy {
+        constructor(x, y) {
+            this.width = 40; this.height = 40;
+            this.x = x !== undefined ? x : Math.random() * (canvas.width - this.width);
+            this.y = y !== undefined ? y : -this.height;
+            this.speed = Math.random() * 2 + 1 + (currentStage * 0.1);
+            this.hp = 2 + Math.floor(currentStage / 2);
+            
+            this.img = customEnemyImages.length > 0 ? customEnemyImages[Math.floor(Math.random() * customEnemyImages.length)] : null;
+            this.shootTimer = Math.random() * 80 + 40;
+            
+            // 🎯 공격 패턴 설정 (0: 일반 직진, 1: 조준탄, 2: 확산탄)
+            let rand = Math.random();
+            if (rand < 0.5) this.pattern = 0;
+            else if (rand < 0.8) this.pattern = 1;
+            else this.pattern = 2;
+        }
+        update() {
+            this.y += this.speed;
+            this.shootTimer--;
+            if(this.shootTimer <= 0) {
+                let cx = this.x + this.width/2; let cy = this.y + this.height;
+                if (this.pattern === 0) { // 직선
+                    enemyBullets.push(new Bullet(cx, cy, 7, '#f0f', 10, true));
+                } else if (this.pattern === 1 && player) { // 플레이어 조준탄 (유도 아님, 쏠 당시의 각도)
+                    let dx = (player.x + player.width/2) - cx;
+                    let dy = (player.y + player.height/2) - cy;
+                    let angle = Math.atan2(dy, dx);
+                    enemyBullets.push(new Bullet(cx, cy, Math.sin(angle)*6, '#ff8000', 10, true, Math.cos(angle)*6));
+                } else if (this.pattern === 2) { // 3방향 확산탄
+                    enemyBullets.push(new Bullet(cx, cy, 5, '#f0f', 10, true, 0));
+                    enemyBullets.push(new Bullet(cx, cy, 4, '#f0f', 10, true, -3));
+                    enemyBullets.push(new Bullet(cx, cy, 4, '#f0f', 10, true, 3));
+                }
+                this.shootTimer = 100 + Math.random() * 80;
+            }
+        }
+        draw() {
+            if (this.img) ctx.drawImage(this.img, this.x, this.y, this.width, this.height);
+            else { 
+                // 패턴에 따라 색상 다르게 표시 (이미지 없을 때)
+                if (this.pattern===0) ctx.fillStyle = '#f00'; 
+                else if (this.pattern===1) ctx.fillStyle = '#ff8000'; 
+                else ctx.fillStyle = '#8000ff';
+                ctx.fillRect(this.x, this.y, this.width, this.height); 
+            }
+        }
+    }
+
+    class Boss {
+        constructor() {
+            this.width = 150; this.height = 150;
+            this.x = canvas.width / 2 - this.width / 2; this.y = -this.height;
+            this.maxHp = 100 + (currentStage * 50); this.hp = this.maxHp;
+            this.speed = 1.5; this.img = customBossImage; this.patternTimer = 0;
+            document.getElementById('bossHpContainer').style.display = 'block'; this.updateHpBar();
+        }
+        update() {
+            if (this.y < 50) this.y += this.speed; 
+            else {
+                this.x += Math.sin(frameCount * 0.02) * 2;
+                this.patternTimer++;
+                if (this.patternTimer % 80 === 0) { // 원형 패턴
+                    for(let i=0; i<8; i++) {
+                        let angle = (Math.PI * 2 / 8) * i + (this.patternTimer * 0.1);
+                        enemyBullets.push(new Bullet(this.x + this.width/2, this.y + this.height, Math.sin(angle)*5, '#f50', 15, true, Math.cos(angle)*5));
+                    }
+                }
+            }
+        }
+        draw() {
+            if (this.img) ctx.drawImage(this.img, this.x, this.y, this.width, this.height);
+            else { ctx.fillStyle = '#800080'; ctx.fillRect(this.x, this.y, this.width, this.height); } 
+        }
+        takeDamage(amt) {
+            this.hp -= amt; this.updateHpBar();
+            if(this.hp <= 0) endGame(true); 
+        }
+        updateHpBar() { document.getElementById('bossHpFill').style.width = Math.max(0, (this.hp / this.maxHp) * 100) + '%'; }
+    }
+
+    // --- 아이템 시스템 ---
+    class Item {
+        constructor(x, y, type) {
+            this.x = x; this.y = y; this.type = type; this.radius = 12; this.speed = 2;
+            if(type === 'WEAPON') { this.color = '#f00'; this.letter = 'W'; }
+            if(type === 'SPEED') { this.color = '#0f0'; this.letter = 'F'; }
+            if(type === 'SHIELD') { this.color = '#0af'; this.letter = 'S'; }
+            if(type === 'HEAL') { this.color = '#fff'; this.letter = 'H'; }
+        }
+        update() { this.y += this.speed; }
+        draw() {
+            ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = 'black'; ctx.font = 'bold 14px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(this.letter, this.x, this.y);
+        }
+    }
+
+    class Particle {
+        constructor(x, y, color) {
+            this.x = x; this.y = y; this.vx = (Math.random() - 0.5) * 6; this.vy = (Math.random() - 0.5) * 6;
+            this.size = Math.random() * 4 + 2; this.life = 30; this.color = color;
+        }
+        update() { this.x += this.vx; this.y += this.vy; this.life--; this.size *= 0.9; }
+        draw() { ctx.fillStyle = this.color; ctx.globalAlpha = this.life / 30; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha = 1; }
+    }
+
+    let player; let bullets = []; let enemyBullets = []; let enemies = []; let particles = []; let items = []; let boss = null;
+    const starsBg = Array.from({ length: 100 }, () => new Star());
+    let frameCount = 0; let animationId;
+
+    function createExplosion(x, y, color) { for (let i = 0; i < 20; i++) particles.push(new Particle(x, y, color)); }
+
+    // ✈️ 편대 비행 스폰 함수
+    function spawnFormation() {
+        const types = ['V', 'LINE', 'SQUARE'];
+        const type = types[Math.floor(Math.random() * types.length)];
+        const cx = Math.random() * (canvas.width - 150) + 75; 
+
+        if (type === 'V') {
+            enemies.push(new Enemy(cx, -40)); enemies.push(new Enemy(cx - 50, -90));
+            enemies.push(new Enemy(cx + 50, -90)); enemies.push(new Enemy(cx - 100, -140)); enemies.push(new Enemy(cx + 100, -140));
+        } else if (type === 'LINE') {
+            for(let i=0; i<5; i++) enemies.push(new Enemy(cx - 100 + (i*50), -50));
+        } else if (type === 'SQUARE') {
+            enemies.push(new Enemy(cx - 30, -50)); enemies.push(new Enemy(cx + 30, -50));
+            enemies.push(new Enemy(cx - 30, -110)); enemies.push(new Enemy(cx + 30, -110));
+        }
+    }
+
+    function updateLobbyUI() { document.getElementById('uiCoins').innerText = gameData.coins; document.getElementById('shopCoins').innerText = gameData.coins; }
+    function openPopup(id) { document.getElementById(id).classList.remove('hidden'); }
+    function closePopup(id) { document.getElementById(id).classList.add('hidden'); }
+
+    function quitGame() {
+        if (confirm("게임을 포기하고 로비로 나가시겠습니까?\n(획득한 점수와 코인은 저장되지 않습니다.)")) {
+            goLobby();
+        }
+    }
+
+    function goLobby() {
+        cancelAnimationFrame(animationId); gameState = 'LOBBY';
+        document.getElementById('lobbyUI').style.display = 'block'; document.getElementById('inGameUI').classList.add('hidden');
+        document.getElementById('bossHpContainer').style.display = 'none';
+        closePopup('resultPopup'); updateLobbyUI(); gameLoop(); 
+    }
+
+    function startStage(stageNum) {
+        document.getElementById('lobbyUI').style.display = 'none'; closePopup('stageSelectPopup'); closePopup('resultPopup');
+        document.getElementById('inGameUI').classList.remove('hidden'); document.getElementById('bossHpContainer').style.display = 'none';
+
+        currentStage = stageNum; isBossStage = (currentStage % 5 === 0); bossSpawned = false; boss = null; score = 0; weaponLevel = 1;
+        stageTimer = 3600 + (currentStage * 120) + (isBossStage ? 600 : 0); // 각 스테이지별 시간 조정 
+
+        player = new Player(); document.getElementById('hpBarFill').style.width = '100%';
+        bullets = []; enemyBullets = []; enemies = []; particles = []; items = []; frameCount = 0; gameState = 'PLAYING';
+    }
+
+    function retryCurrentStage() { startStage(currentStage); }
+    function openStageSelectFromResult() { goLobby(); openStageSelect(); }
+
+    function openStageSelect() {
+        let list = document.getElementById('stageList'); list.innerHTML = '';
+        for(let i=1; i<=30; i++) {
+            let btn = document.createElement('button'); btn.className = 'action-btn';
+            if (i % 5 === 0) { btn.innerText = `💀 STAGE ${i}`; btn.style.border = "1px solid red"; } else btn.innerText = `STAGE ${i}`;
+            
+            if(i > gameData.maxStage) { btn.style.background = '#1a1a24'; btn.style.color = '#555'; btn.style.border = "1px solid #333"; btn.disabled = true; btn.innerText += ' 🔒'; } 
+            else btn.onclick = () => startStage(i);
+            list.appendChild(btn);
+        }
+        openPopup('stageSelectPopup');
+    }
+
+    function endGame(isClear) {
+        gameState = 'RESULT';
+        let title = document.getElementById('resultTitle'); let coinTxt = document.getElementById('resultCoinsText');
+        document.getElementById('resultScore').innerText = score;
+        if (isClear) {
+            title.innerText = "STAGE CLEAR!"; title.style.color = "#66fcf1";
+            let earnedCoins = Math.floor(score / 5) + (isBossStage ? 500 : 0);
+            coinTxt.innerText = "+" + earnedCoins + " 코인 획득!";
+            gameData.coins += earnedCoins;
+            if(currentStage === gameData.maxStage) gameData.maxStage++;
+            checkAchievements(); 
+        } else {
+            title.innerText = "GAME OVER"; title.style.color = "#f00"; coinTxt.innerText = "클리어 실패 (보상 없음)";
+        }
+        saveData(); setTimeout(() => openPopup('resultPopup'), 500);
+    }
+
+    function gameLoop() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        starsBg.forEach(star => { star.update(); star.draw(); });
+
+        if (gameState === 'PLAYING') {
+            frameCount++; document.getElementById('uiScore').innerText = score;
+
+            if (!isBossStage || !bossSpawned) {
+                stageTimer--;
+                if (stageTimer <= 0) {
+                    if (isBossStage) { boss = new Boss(); bossSpawned = true; } 
+                    else endGame(true); 
+                }
+            }
+
+            // 적 생성 (편대 비행 20% 확률 섞음)
+            if (!bossSpawned && frameCount % Math.max(30, 80 - (currentStage * 3)) === 0) {
+                if (Math.random() < 0.2) spawnFormation();
+                else enemies.push(new Enemy());
+            }
+
+            player.update(); player.draw();
+            if(boss) { boss.update(); boss.draw(); }
+
+            // 아이템 업데이트 및 획득
+            for (let i = items.length - 1; i >= 0; i--) {
+                let item = items[i]; item.update(); item.draw();
+                if (item.y > canvas.height) { items.splice(i, 1); continue; }
+                let dx = player.x + player.width/2 - item.x; let dy = player.y + player.height/2 - item.y;
+                if (Math.sqrt(dx*dx + dy*dy) < item.radius + player.width/2) {
+                    if (item.type === 'WEAPON' && weaponLevel < 3) weaponLevel++;
+                    if (item.type === 'SPEED' && player.baseCooldown > 4) player.baseCooldown -= 2;
+                    if (item.type === 'SHIELD') player.shield = true;
+                    if (item.type === 'HEAL') player.heal(20);
+                    items.splice(i, 1); createExplosion(item.x, item.y, '#fff'); // 획득 이펙트
+                }
+            }
+
+            // 플레이어 총알 처리
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                let b = bullets[i]; b.update(); b.draw();
+                if (b.y < 0) { bullets.splice(i, 1); continue; }
+
+                if (boss && b.x > boss.x && b.x < boss.x + boss.width && b.y > boss.y && b.y < boss.y + boss.height) {
+                    boss.takeDamage(b.damage); bullets.splice(i, 1); createExplosion(b.x, b.y, '#fff'); continue;
+                }
+
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    let e = enemies[j];
+                    if (b.x > e.x && b.x < e.x + e.width && b.y > e.y && b.y < e.y + e.height) {
+                        e.hp -= b.damage; bullets.splice(i, 1); createExplosion(b.x, b.y, '#fff');
+                        if (e.hp <= 0) { 
+                            createExplosion(e.x + e.width/2, e.y + e.height/2, '#f00'); 
+                            // 아이템 드롭 (15% 확률)
+                            if (Math.random() < 0.15) {
+                                const types = ['WEAPON', 'SPEED', 'SHIELD', 'HEAL'];
+                                items.push(new Item(e.x + e.width/2, e.y + e.height/2, types[Math.floor(Math.random()*types.length)]));
+                            }
+                            enemies.splice(j, 1); score += 50; 
+                        }
+                        break;
+                    }
+                }
+            }
+
+            for (let i = enemyBullets.length - 1; i >= 0; i--) {
+                let eb = enemyBullets[i]; eb.update(); eb.draw();
+                if (eb.y > canvas.height || eb.x < 0 || eb.x > canvas.width) { enemyBullets.splice(i, 1); continue; }
+                let pPad = 10;
+                if (eb.x > player.x + pPad && eb.x < player.x + player.width - pPad && eb.y > player.y + pPad && eb.y < player.y + player.height - pPad) {
+                    player.takeDamage(eb.damage); enemyBullets.splice(i, 1); createExplosion(player.x+player.width/2, player.y+player.height/2, '#f00');
+                }
+            }
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                let e = enemies[i]; e.update(); e.draw();
+                if (e.y > canvas.height) { enemies.splice(i, 1); continue; }
+                let pPad = 10;
+                if (player.x + pPad < e.x + e.width && player.x + player.width - pPad > e.x && player.y + pPad < e.y + e.height && player.y + player.height - pPad > e.y) {
+                    player.takeDamage(20); createExplosion(e.x+e.width/2, e.y+e.height/2, '#f00'); enemies.splice(i, 1);
+                }
+            }
+        }
+
+        for (let i = particles.length - 1; i >= 0; i--) {
+            let p = particles[i]; p.update(); p.draw();
+            if (p.life <= 0) particles.splice(i, 1);
+        }
+
+        animationId = requestAnimationFrame(gameLoop);
+    }
+
+    function generateShopAndCharLists() {
+        let shopHTML = ''; let charHTML = '';
+        for(let i=0; i<10; i++) {
+            let isOwned = gameData.ownedChars.includes(i); 
+            let isEquipped = (gameData.equippedChar === i); 
+            let price = gameData.charPrices[i];
+            
+            let displayElement = customCharImages[i] 
+                ? `<img src="${customCharImages[i].src}" alt="Char ${i}" style="width:50px; height:50px; object-fit:contain; margin:0 auto 10px; display:block;">`
+                : `<div style="width:50px; height:50px; background:${charColors[i]}; margin:0 auto 10px;"></div>`;
+                
+            let cardObj = `<div class="item-card">${displayElement}`;
+            
+            shopHTML += cardObj + `<h4>Char ${i}</h4>`;
+            if(isOwned) shopHTML += `<button disabled style="background:#555; color:#fff; border:none; padding:5px; width:100%;">보유중</button></div>`;
+            else shopHTML += `<button onclick="buyChar(${i}, ${price})" style="background:gold; border:none; padding:5px; width:100%; cursor:pointer; font-weight:bold;">💰 ${price}</button></div>`;
+            
+            if(isOwned) {
+                charHTML += cardObj + `<h4>Char ${i}</h4>`;
+                if(isEquipped) charHTML += `<button disabled style="background:#0f0; color:#000; border:none; padding:5px; width:100%; font-weight:bold;">장착중</button></div>`;
+                else charHTML += `<button onclick="equipChar(${i})" style="background:#45a29e; color:#fff; border:none; padding:5px; width:100%; cursor:pointer;">장착</button></div>`;
+            }
+        }
+        document.getElementById('shopList').innerHTML = shopHTML; 
+        document.getElementById('charList').innerHTML = charHTML;
+    }
+
+    function buyChar(id, price) { 
+        if(gameData.coins >= price) { 
+            gameData.coins -= price; 
+            gameData.ownedChars.push(id); 
+            checkAchievements();
+            saveData(); 
+            generateShopAndCharLists(); 
+            alert('구매 완료!'); 
+        } else {
+            alert('코인이 부족합니다!'); 
+        }
+    }
+
+    function equipChar(id) { gameData.equippedChar = id; saveData(); generateShopAndCharLists(); closePopup('charPopup'); }
+    function openCharSelect() { generateShopAndCharLists(); openPopup('charPopup'); }
+
+    const achieveData = [ 
+        { id: 'first_play', desc: '첫 비행 (1스테이지 플레이)' }, 
+        { id: 'boss_killer', desc: '보스 슬레이어 (5스테이지 클리어)' }, 
+        { id: 'rich', desc: '만수르 (코인 5,000 보유)' },
+        { id: 'veteran_pilot', desc: '베테랑 파일럿 (10스테이지 클리어)' },
+        { id: 'character_collector', desc: '캐릭터 수집가 (캐릭터 3개 이상 보유)' },
+        { id: 'perfect_clear', desc: '무결점 비행 (피격 없이 스테이지 클리어)' }
+    ];
+
+    function checkAchievements() {
+        if(currentStage >= 1 && !gameData.achievements.includes('first_play')) gameData.achievements.push('first_play');
+        if(currentStage > 5 && !gameData.achievements.includes('boss_killer')) gameData.achievements.push('boss_killer');
+        if(gameData.coins >= 5000 && !gameData.achievements.includes('rich')) gameData.achievements.push('rich');
+        if(currentStage > 10 && !gameData.achievements.includes('veteran_pilot')) gameData.achievements.push('veteran_pilot');
+        if(gameData.ownedChars.length >= 3 && !gameData.achievements.includes('character_collector')) gameData.achievements.push('character_collector');
+        if(player && player.hp >= player.maxHp && !gameData.achievements.includes('perfect_clear')) gameData.achievements.push('perfect_clear');
+        saveData();
+    }
+
+    function openAchievements() {
+        let html = ''; achieveData.forEach(a => { let done = gameData.achievements.includes(a.id); html += `<div style="color:${done?'#0f0':'#555'}; margin-bottom:10px;">${done?'✅':'🔒'} ${a.desc}</div>`; });
+        document.getElementById('achieveList').innerHTML = html; openPopup('achievePopup');
+    }
+
+    function tryAdminLogin() { if(document.getElementById('loginId').value === gameData.adminId && document.getElementById('loginPw').value === gameData.adminPw) { closePopup('adminLoginPopup'); openPopup('adminPanel'); initAdminPanel(); } else alert('정보가 일치하지 않습니다.'); }
+    function saveAdminCreds() { let nid = document.getElementById('setAdminId').value; let npw = document.getElementById('setAdminPw').value; if(nid && npw) { gameData.adminId = nid; gameData.adminPw = npw; saveData(); alert('계정 정보가 변경되었습니다.'); } }
+    function initAdminPanel() {
+        let html = '';
+        for(let i=0; i<10; i++) html += `<div style="margin-bottom:10px; border-bottom:1px solid #333; padding-bottom:5px;"><label>Char ${i} 가격:</label> <input type="number" id="admPrice${i}" value="${gameData.charPrices[i]}" style="width:80px; margin-right:10px;"><label>이미지:</label> <input type="file" onchange="uploadPlayerImage(event, ${i})" accept="image/*"></div>`;
+        document.getElementById('adminCharSlots').innerHTML = html;
+    }
+    function saveAdminChars() { for(let i=0; i<10; i++) gameData.charPrices[i] = parseInt(document.getElementById(`admPrice${i}`).value) || 0; saveData(); generateShopAndCharLists(); alert('저장되었습니다.'); }
+    
+    function uploadPlayerImage(e, index) { if(e.target.files[0]) customCharImages[index] = loadImage(e.target.files[0]); }
+    document.getElementById('uploadBoss').addEventListener('change', e => { if(e.target.files[0]) customBossImage = loadImage(e.target.files[0]); });
+    document.getElementById('uploadEnemies').addEventListener('change', e => { customEnemyImages = []; for(let file of e.target.files) customEnemyImages.push(loadImage(file)); });
+    function loadImage(file) { let img = new Image(); img.src = URL.createObjectURL(file); return img; }
+
+    updateLobbyUI(); generateShopAndCharLists(); gameLoop();
+</script>
+</body>
+</html>
