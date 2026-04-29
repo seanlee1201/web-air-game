@@ -117,30 +117,30 @@
 
     const charColors = ['#0af', '#f00', '#0f0', '#ff0', '#f0f', '#0ff', '#f80', '#80f', '#fff', '#888'];
     
-    // 💡 GitHub에 업로드될 기본 이미지 파일명 (확장자가 다르면 여기서 수정하세요)
+    // 💡 캐릭터와 적은 .png, 보스는 .gif 로 설정했습니다.
     const defaultCharPaths = ['ch 1.png', 'ch 2.png'];
     const defaultEnemyPaths = ['enemy 1.png', 'enemy 2.png'];
+    const defaultBossPath = 'boss 1.gif';
 
     let customCharImages = new Array(10).fill(null); 
     let customEnemyImages = []; let customBossImage = null;
 
-    // 💡 이미지 초기화 (기본 파일 불러오기 -> 관리자 업로드 파일로 덮어쓰기)
     function initImages() {
-        // 1. 기본 제공 캐릭터 이미지 세팅
         defaultCharPaths.forEach((path, i) => {
             let img = new Image(); img.src = path;
             customCharImages[i] = img;
         });
 
-        // 2. 기본 제공 적기 세팅
         defaultEnemyPaths.forEach(path => {
             let img = new Image(); img.src = path;
             customEnemyImages.push(img);
         });
 
+        customBossImage = new Image();
+        customBossImage.src = defaultBossPath;
+
         if (!gameData.savedImages) return;
 
-        // 3. 관리자가 업로드(영구 저장)한 캐릭터가 있으면 덮어쓰기
         if (gameData.savedImages.chars) {
             gameData.savedImages.chars.forEach((base64, i) => {
                 if (base64) {
@@ -150,16 +150,14 @@
             });
         }
         
-        // 4. 관리자가 업로드한 적기가 있으면 기본 적기를 대체하기
         if (gameData.savedImages.enemies && gameData.savedImages.enemies.length > 0) {
-            customEnemyImages = []; // 기본 적기 초기화
+            customEnemyImages = [];
             gameData.savedImages.enemies.forEach(base64 => {
                 let img = new Image(); img.src = base64;
                 customEnemyImages.push(img);
             });
         }
         
-        // 5. 보스 이미지
         if (gameData.savedImages.boss) {
             customBossImage = new Image();
             customBossImage.src = gameData.savedImages.boss;
@@ -214,8 +212,12 @@
                 ctx.beginPath(); ctx.arc(this.x + this.width/2, this.y + this.height/2, this.width/2 + 10, 0, Math.PI*2);
                 ctx.strokeStyle = '#0af'; ctx.lineWidth = 3; ctx.stroke();
             }
-            if (this.img) ctx.drawImage(this.img, this.x, this.y, this.width, this.height);
-            else { ctx.fillStyle = this.color; ctx.fillRect(this.x, this.y, this.width, this.height); }
+            // 💡 이미지 로딩 방어 코드
+            if (this.img && this.img.complete && this.img.naturalWidth > 0) {
+                ctx.drawImage(this.img, this.x, this.y, this.width, this.height);
+            } else { 
+                ctx.fillStyle = this.color; ctx.fillRect(this.x, this.y, this.width, this.height); 
+            }
         }
         takeDamage(amt) {
             if (this.shield) { this.shield = false; return; }
@@ -276,8 +278,10 @@
             }
         }
         draw() {
-            if (this.img) ctx.drawImage(this.img, this.x, this.y, this.width, this.height);
-            else { 
+            // 💡 이미지 로딩 방어 코드
+            if (this.img && this.img.complete && this.img.naturalWidth > 0) {
+                ctx.drawImage(this.img, this.x, this.y, this.width, this.height);
+            } else { 
                 if (this.pattern===0) ctx.fillStyle = '#f00'; 
                 else if (this.pattern===1) ctx.fillStyle = '#ff8000'; 
                 else ctx.fillStyle = '#8000ff';
@@ -308,8 +312,12 @@
             }
         }
         draw() {
-            if (this.img) ctx.drawImage(this.img, this.x, this.y, this.width, this.height);
-            else { ctx.fillStyle = '#800080'; ctx.fillRect(this.x, this.y, this.width, this.height); } 
+            // 💡 이미지 로딩 방어 코드
+            if (this.img && this.img.complete && this.img.naturalWidth > 0) {
+                ctx.drawImage(this.img, this.x, this.y, this.width, this.height);
+            } else { 
+                ctx.fillStyle = '#800080'; ctx.fillRect(this.x, this.y, this.width, this.height); 
+            } 
         }
         takeDamage(amt) {
             this.hp -= amt; this.updateHpBar();
@@ -517,7 +525,6 @@
     function generateShopAndCharLists() {
         let shopHTML = ''; let charHTML = '';
         for(let i=0; i<10; i++) {
-            // 💡 이미지가 할당되지 않은 슬롯은 UI에서 완전히 제외합니다. (색깔 상자 방지)
             if (!customCharImages[i]) continue; 
 
             let isOwned = gameData.ownedChars.includes(i); 
@@ -635,7 +642,12 @@
         });
     });
 
-    updateLobbyUI(); generateShopAndCharLists(); gameLoop();
+    // 💡 모든 준비가 끝난 후 최초 게임 루프 시작
+    window.onload = () => {
+        updateLobbyUI(); 
+        generateShopAndCharLists(); 
+        gameLoop();
+    };
 </script>
 </body>
 </html>
