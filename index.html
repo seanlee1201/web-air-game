@@ -94,7 +94,7 @@
             <button class="close-btn" onclick="closePopup('adminPanel')">×</button>
             <h2>🛠️ 관리자 패널</h2>
             <div class="admin-section"><h3>계정 설정</h3><input type="text" id="setAdminId" placeholder="새 아이디"><input type="password" id="setAdminPw" placeholder="새 비밀번호"><button class="action-btn" onclick="saveAdminCreds()">변경 저장</button></div>
-            <div class="admin-section"><h3>적군 & 보스 이미지 (현재 세션 임시적용)</h3><p>일반 적기 (다중 선택 가능): <input type="file" id="uploadEnemies" accept="image/*" multiple></p><p>보스 기체: <input type="file" id="uploadBoss" accept="image/*"></p></div>
+            <div class="admin-section"><h3>적군 & 보스 이미지 (영구 적용)</h3><p>일반 적기 (다중 선택 가능): <input type="file" id="uploadEnemies" accept="image/*" multiple></p><p>보스 기체: <input type="file" id="uploadBoss" accept="image/*"></p></div>
             <div class="admin-section"><h3>상점 캐릭터 설정 (총 10슬롯)</h3><div id="adminCharSlots" style="max-height: 200px; overflow-y: auto;"></div><button class="action-btn" onclick="saveAdminChars()" style="width:100%; margin-top:10px;">캐릭터 가격 저장</button></div>
         </div>
     </div>
@@ -104,13 +104,68 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
-    let defaultData = { coins: 0, maxStage: 1, ownedChars: [0], equippedChar: 0, adminId: 'sean', adminPw: '1234', achievements: [], charPrices: [0, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 5000] };
+    let defaultData = { 
+        coins: 0, maxStage: 1, ownedChars: [0], equippedChar: 0, 
+        adminId: 'sean', adminPw: '1234', achievements: [], 
+        charPrices: [0, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 5000],
+        savedImages: { chars: [], enemies: [], boss: null } 
+    };
+
     let gameData = JSON.parse(localStorage.getItem('1945_data')) || defaultData;
+    if(!gameData.savedImages) gameData.savedImages = { chars: [], enemies: [], boss: null };
     function saveData() { localStorage.setItem('1945_data', JSON.stringify(gameData)); updateLobbyUI(); }
 
     const charColors = ['#0af', '#f00', '#0f0', '#ff0', '#f0f', '#0ff', '#f80', '#80f', '#fff', '#888'];
+    
+    // 💡 GitHub에 업로드될 기본 이미지 파일명 (확장자가 다르면 여기서 수정하세요)
+    const defaultCharPaths = ['ch 1.png', 'ch 2.png'];
+    const defaultEnemyPaths = ['enemy 1.png', 'enemy 2.png'];
+
     let customCharImages = new Array(10).fill(null); 
     let customEnemyImages = []; let customBossImage = null;
+
+    // 💡 이미지 초기화 (기본 파일 불러오기 -> 관리자 업로드 파일로 덮어쓰기)
+    function initImages() {
+        // 1. 기본 제공 캐릭터 이미지 세팅
+        defaultCharPaths.forEach((path, i) => {
+            let img = new Image(); img.src = path;
+            customCharImages[i] = img;
+        });
+
+        // 2. 기본 제공 적기 세팅
+        defaultEnemyPaths.forEach(path => {
+            let img = new Image(); img.src = path;
+            customEnemyImages.push(img);
+        });
+
+        if (!gameData.savedImages) return;
+
+        // 3. 관리자가 업로드(영구 저장)한 캐릭터가 있으면 덮어쓰기
+        if (gameData.savedImages.chars) {
+            gameData.savedImages.chars.forEach((base64, i) => {
+                if (base64) {
+                    let img = new Image(); img.src = base64;
+                    customCharImages[i] = img;
+                }
+            });
+        }
+        
+        // 4. 관리자가 업로드한 적기가 있으면 기본 적기를 대체하기
+        if (gameData.savedImages.enemies && gameData.savedImages.enemies.length > 0) {
+            customEnemyImages = []; // 기본 적기 초기화
+            gameData.savedImages.enemies.forEach(base64 => {
+                let img = new Image(); img.src = base64;
+                customEnemyImages.push(img);
+            });
+        }
+        
+        // 5. 보스 이미지
+        if (gameData.savedImages.boss) {
+            customBossImage = new Image();
+            customBossImage.src = gameData.savedImages.boss;
+        }
+    }
+    initImages();
 
     let gameState = 'LOBBY'; let currentStage = 1; let score = 0; let stageTimer = 0; let isBossStage = false; let bossSpawned = false;
     let weaponLevel = 1; 
@@ -128,9 +183,9 @@
         constructor() {
             this.width = 45; this.height = 45;
             this.x = canvas.width / 2 - this.width / 2; this.y = canvas.height - 80;
-            this.speed = 6; this.cooldown = 0; this.baseCooldown = 12; // 기본 연사력
+            this.speed = 6; this.cooldown = 0; this.baseCooldown = 12; 
             this.maxHp = 100; this.hp = 100;
-            this.shield = false; // 쉴드 상태
+            this.shield = false;
             this.img = customCharImages[gameData.equippedChar]; this.color = charColors[gameData.equippedChar];
         }
         update() {
@@ -145,7 +200,7 @@
                     bullets.push(new Bullet(cx, this.y, -15, '#ff0', 10));
                 } else if (weaponLevel === 2) {
                     bullets.push(new Bullet(cx - 10, this.y, -15, '#ff0', 10)); bullets.push(new Bullet(cx + 10, this.y, -15, '#ff0', 10));
-                } else { // 3방향 확산탄
+                } else { 
                     bullets.push(new Bullet(cx, this.y, -15, '#ff0', 10));
                     bullets.push(new Bullet(cx - 15, this.y + 10, -13, '#ff0', 10, false, -3));
                     bullets.push(new Bullet(cx + 15, this.y + 10, -13, '#ff0', 10, false, 3));
@@ -163,7 +218,7 @@
             else { ctx.fillStyle = this.color; ctx.fillRect(this.x, this.y, this.width, this.height); }
         }
         takeDamage(amt) {
-            if (this.shield) { this.shield = false; return; } // 쉴드가 있으면 데미지 무시하고 쉴드만 파괴
+            if (this.shield) { this.shield = false; return; }
             this.hp -= amt;
             document.getElementById('hpBarFill').style.width = Math.max(0, (this.hp / this.maxHp) * 100) + '%';
             if(this.hp <= 0) endGame(false);
@@ -195,7 +250,6 @@
             this.img = customEnemyImages.length > 0 ? customEnemyImages[Math.floor(Math.random() * customEnemyImages.length)] : null;
             this.shootTimer = Math.random() * 80 + 40;
             
-            // 🎯 공격 패턴 설정 (0: 일반 직진, 1: 조준탄, 2: 확산탄)
             let rand = Math.random();
             if (rand < 0.5) this.pattern = 0;
             else if (rand < 0.8) this.pattern = 1;
@@ -206,14 +260,14 @@
             this.shootTimer--;
             if(this.shootTimer <= 0) {
                 let cx = this.x + this.width/2; let cy = this.y + this.height;
-                if (this.pattern === 0) { // 직선
+                if (this.pattern === 0) {
                     enemyBullets.push(new Bullet(cx, cy, 7, '#f0f', 10, true));
-                } else if (this.pattern === 1 && player) { // 플레이어 조준탄 (유도 아님, 쏠 당시의 각도)
+                } else if (this.pattern === 1 && player) {
                     let dx = (player.x + player.width/2) - cx;
                     let dy = (player.y + player.height/2) - cy;
                     let angle = Math.atan2(dy, dx);
                     enemyBullets.push(new Bullet(cx, cy, Math.sin(angle)*6, '#ff8000', 10, true, Math.cos(angle)*6));
-                } else if (this.pattern === 2) { // 3방향 확산탄
+                } else if (this.pattern === 2) {
                     enemyBullets.push(new Bullet(cx, cy, 5, '#f0f', 10, true, 0));
                     enemyBullets.push(new Bullet(cx, cy, 4, '#f0f', 10, true, -3));
                     enemyBullets.push(new Bullet(cx, cy, 4, '#f0f', 10, true, 3));
@@ -224,7 +278,6 @@
         draw() {
             if (this.img) ctx.drawImage(this.img, this.x, this.y, this.width, this.height);
             else { 
-                // 패턴에 따라 색상 다르게 표시 (이미지 없을 때)
                 if (this.pattern===0) ctx.fillStyle = '#f00'; 
                 else if (this.pattern===1) ctx.fillStyle = '#ff8000'; 
                 else ctx.fillStyle = '#8000ff';
@@ -246,7 +299,7 @@
             else {
                 this.x += Math.sin(frameCount * 0.02) * 2;
                 this.patternTimer++;
-                if (this.patternTimer % 80 === 0) { // 원형 패턴
+                if (this.patternTimer % 80 === 0) {
                     for(let i=0; i<8; i++) {
                         let angle = (Math.PI * 2 / 8) * i + (this.patternTimer * 0.1);
                         enemyBullets.push(new Bullet(this.x + this.width/2, this.y + this.height, Math.sin(angle)*5, '#f50', 15, true, Math.cos(angle)*5));
@@ -265,7 +318,6 @@
         updateHpBar() { document.getElementById('bossHpFill').style.width = Math.max(0, (this.hp / this.maxHp) * 100) + '%'; }
     }
 
-    // --- 아이템 시스템 ---
     class Item {
         constructor(x, y, type) {
             this.x = x; this.y = y; this.type = type; this.radius = 12; this.speed = 2;
@@ -297,7 +349,6 @@
 
     function createExplosion(x, y, color) { for (let i = 0; i < 20; i++) particles.push(new Particle(x, y, color)); }
 
-    // ✈️ 편대 비행 스폰 함수
     function spawnFormation() {
         const types = ['V', 'LINE', 'SQUARE'];
         const type = types[Math.floor(Math.random() * types.length)];
@@ -336,7 +387,7 @@
         document.getElementById('inGameUI').classList.remove('hidden'); document.getElementById('bossHpContainer').style.display = 'none';
 
         currentStage = stageNum; isBossStage = (currentStage % 5 === 0); bossSpawned = false; boss = null; score = 0; weaponLevel = 1;
-        stageTimer = 3600 + (currentStage * 120) + (isBossStage ? 600 : 0); // 각 스테이지별 시간 조정 
+        stageTimer = 3600 + (currentStage * 120) + (isBossStage ? 600 : 0); 
 
         player = new Player(); document.getElementById('hpBarFill').style.width = '100%';
         bullets = []; enemyBullets = []; enemies = []; particles = []; items = []; frameCount = 0; gameState = 'PLAYING';
@@ -390,7 +441,6 @@
                 }
             }
 
-            // 적 생성 (편대 비행 20% 확률 섞음)
             if (!bossSpawned && frameCount % Math.max(30, 80 - (currentStage * 3)) === 0) {
                 if (Math.random() < 0.2) spawnFormation();
                 else enemies.push(new Enemy());
@@ -399,7 +449,6 @@
             player.update(); player.draw();
             if(boss) { boss.update(); boss.draw(); }
 
-            // 아이템 업데이트 및 획득
             for (let i = items.length - 1; i >= 0; i--) {
                 let item = items[i]; item.update(); item.draw();
                 if (item.y > canvas.height) { items.splice(i, 1); continue; }
@@ -409,11 +458,10 @@
                     if (item.type === 'SPEED' && player.baseCooldown > 4) player.baseCooldown -= 2;
                     if (item.type === 'SHIELD') player.shield = true;
                     if (item.type === 'HEAL') player.heal(20);
-                    items.splice(i, 1); createExplosion(item.x, item.y, '#fff'); // 획득 이펙트
+                    items.splice(i, 1); createExplosion(item.x, item.y, '#fff');
                 }
             }
 
-            // 플레이어 총알 처리
             for (let i = bullets.length - 1; i >= 0; i--) {
                 let b = bullets[i]; b.update(); b.draw();
                 if (b.y < 0) { bullets.splice(i, 1); continue; }
@@ -428,7 +476,6 @@
                         e.hp -= b.damage; bullets.splice(i, 1); createExplosion(b.x, b.y, '#fff');
                         if (e.hp <= 0) { 
                             createExplosion(e.x + e.width/2, e.y + e.height/2, '#f00'); 
-                            // 아이템 드롭 (15% 확률)
                             if (Math.random() < 0.15) {
                                 const types = ['WEAPON', 'SPEED', 'SHIELD', 'HEAL'];
                                 items.push(new Item(e.x + e.width/2, e.y + e.height/2, types[Math.floor(Math.random()*types.length)]));
@@ -470,22 +517,23 @@
     function generateShopAndCharLists() {
         let shopHTML = ''; let charHTML = '';
         for(let i=0; i<10; i++) {
+            // 💡 이미지가 할당되지 않은 슬롯은 UI에서 완전히 제외합니다. (색깔 상자 방지)
+            if (!customCharImages[i]) continue; 
+
             let isOwned = gameData.ownedChars.includes(i); 
             let isEquipped = (gameData.equippedChar === i); 
             let price = gameData.charPrices[i];
             
-            let displayElement = customCharImages[i] 
-                ? `<img src="${customCharImages[i].src}" alt="Char ${i}" style="width:50px; height:50px; object-fit:contain; margin:0 auto 10px; display:block;">`
-                : `<div style="width:50px; height:50px; background:${charColors[i]}; margin:0 auto 10px;"></div>`;
+            let displayElement = `<img src="${customCharImages[i].src}" alt="Char ${i}" style="width:50px; height:50px; object-fit:contain; margin:0 auto 10px; display:block;">`;
                 
             let cardObj = `<div class="item-card">${displayElement}`;
             
-            shopHTML += cardObj + `<h4>Char ${i}</h4>`;
+            shopHTML += cardObj + `<h4 style="margin:5px 0;">Char ${i}</h4>`;
             if(isOwned) shopHTML += `<button disabled style="background:#555; color:#fff; border:none; padding:5px; width:100%;">보유중</button></div>`;
             else shopHTML += `<button onclick="buyChar(${i}, ${price})" style="background:gold; border:none; padding:5px; width:100%; cursor:pointer; font-weight:bold;">💰 ${price}</button></div>`;
             
             if(isOwned) {
-                charHTML += cardObj + `<h4>Char ${i}</h4>`;
+                charHTML += cardObj + `<h4 style="margin:5px 0;">Char ${i}</h4>`;
                 if(isEquipped) charHTML += `<button disabled style="background:#0f0; color:#000; border:none; padding:5px; width:100%; font-weight:bold;">장착중</button></div>`;
                 else charHTML += `<button onclick="equipChar(${i})" style="background:#45a29e; color:#fff; border:none; padding:5px; width:100%; cursor:pointer;">장착</button></div>`;
             }
@@ -543,10 +591,49 @@
     }
     function saveAdminChars() { for(let i=0; i<10; i++) gameData.charPrices[i] = parseInt(document.getElementById(`admPrice${i}`).value) || 0; saveData(); generateShopAndCharLists(); alert('저장되었습니다.'); }
     
-    function uploadPlayerImage(e, index) { if(e.target.files[0]) customCharImages[index] = loadImage(e.target.files[0]); }
-    document.getElementById('uploadBoss').addEventListener('change', e => { if(e.target.files[0]) customBossImage = loadImage(e.target.files[0]); });
-    document.getElementById('uploadEnemies').addEventListener('change', e => { customEnemyImages = []; for(let file of e.target.files) customEnemyImages.push(loadImage(file)); });
-    function loadImage(file) { let img = new Image(); img.src = URL.createObjectURL(file); return img; }
+    function saveImageToData(file, callback) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const base64 = e.target.result;
+            callback(base64);
+            saveData();
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function uploadPlayerImage(e, index) { 
+        if(e.target.files[0]) {
+            saveImageToData(e.target.files[0], (base64) => {
+                gameData.savedImages.chars[index] = base64;
+                customCharImages[index] = new Image();
+                customCharImages[index].src = base64;
+                generateShopAndCharLists();
+            });
+        }
+    }
+    
+    document.getElementById('uploadBoss').addEventListener('change', e => { 
+        if(e.target.files[0]) {
+            saveImageToData(e.target.files[0], (base64) => {
+                gameData.savedImages.boss = base64;
+                customBossImage = new Image();
+                customBossImage.src = base64;
+            });
+        }
+    });
+
+    document.getElementById('uploadEnemies').addEventListener('change', e => { 
+        gameData.savedImages.enemies = [];
+        customEnemyImages = [];
+        Array.from(e.target.files).forEach(file => {
+            saveImageToData(file, (base64) => {
+                gameData.savedImages.enemies.push(base64);
+                let img = new Image();
+                img.src = base64;
+                customEnemyImages.push(img);
+            });
+        });
+    });
 
     updateLobbyUI(); generateShopAndCharLists(); gameLoop();
 </script>
